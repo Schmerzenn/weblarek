@@ -69,12 +69,12 @@ class PreviewCardView extends Card<ICard> {
     // Обновляем класс категории в соответствии с типом
     set category(value: string) {
         this.categoryNode.textContent = String(value);
+        const normalizedValue = String(value).trim().toLowerCase();
 
         for (const key in categoryMap) {
-            this.categoryNode.classList.toggle(
-                categoryMap[key as CategoryKey],
-                key === value
-            );
+            const className = categoryMap[key as CategoryKey];
+            const shouldApply = key.toLowerCase() === normalizedValue;
+            this.categoryNode.classList.toggle(className, shouldApply);
         }
     }
 

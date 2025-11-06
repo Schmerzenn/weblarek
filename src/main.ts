@@ -15,7 +15,7 @@ import { Modal } from './components/View/ModalPortal';
 import { Basket } from './components/View/BasketOverlay';
 import { CardBasket } from './components/View/Card/BasketLineCard';
 import { FormOrder } from './components/View/Form/OrderForm';
-import { FormContacts } from './components/View/Form/FormCont';
+import { FormContacts } from './components/View/Form/ContactFormView';
 import { Success } from './components/View/OrderSuccess';
 
 type TEventPayload = { id: string };

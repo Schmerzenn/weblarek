@@ -19,11 +19,14 @@ export const API_URL = composeUrl('api/weblarek');
 export const CDN_URL = composeUrl('content/weblarek');
 
 const CATEGORY_CLASSNAME_MAP = Object.freeze({
-  'Soft skill': 'card__category_soft',
-  'Hard skill': 'card__category_hard',
+  'софт-скил': 'card__category_soft',
+  'хард-скил': 'card__category_hard',
   Button: 'card__category_button',
+  'кнопка': 'card__category_button',
   Extras: 'card__category_additional',
+  'дополнительное': 'card__category_additional',
   Other: 'card__category_other',
+  'другое': 'card__category_other',
 } as const);
 
 /** Maps human-readable categories to card CSS modifiers. */

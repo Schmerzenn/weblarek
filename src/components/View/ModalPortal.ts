@@ -11,7 +11,24 @@ class ModalPortal extends Component<TModalContent> {
     protected closeTrigger: HTMLButtonElement;
     protected contentHost: HTMLElement;
     protected pageWrapper: HTMLElement;
+    protected eventsBound = false;
     isOpen = false;
+
+    private readonly handleCloseButtonClick = () => {
+        this.close();
+    };
+
+    private readonly handleBackdropClick = (event: MouseEvent) => {
+        if (event.target === this.container) {
+            this.close();
+        }
+    };
+
+    private readonly handleKeydown = (event: KeyboardEvent) => {
+        if (this.isOpen && (event.key === "Escape" || event.key === "Enter")) {
+            this.close();
+        }
+    };
 
     constructor(container: HTMLElement, protected events: IEvents) {
         super(container);
@@ -19,24 +36,30 @@ class ModalPortal extends Component<TModalContent> {
         this.closeTrigger = ensureElement<HTMLButtonElement>(".modal__close", this.container);
         this.contentHost = ensureElement<HTMLElement>(".modal__content", this.container);
         this.pageWrapper = ensureElement<HTMLElement>(".page__wrapper");
+    }
 
-        // Закрываем модальное окно по нажатию на кнопку
-        this.closeTrigger.addEventListener("click", () => {
-            this.close();
-        });
+    protected bindEvents(): void {
+        if (this.eventsBound) {
+            return;
+        }
 
-        this.container.addEventListener("click", (event) => {
-            if (event.target === this.container) {
-                this.close();
-            }
-        });
+        this.closeTrigger.addEventListener("click", this.handleCloseButtonClick);
+        this.container.addEventListener("click", this.handleBackdropClick);
+        document.addEventListener("keydown", this.handleKeydown);
 
-        // Обрабатываем закрытие по клавиатуре
-        document.addEventListener("keydown", (event) => {
-            if (this.isOpen && (event.key === "Escape" || event.key === "Enter")) {
-                this.close();
-            }
-        });
+        this.eventsBound = true;
+    }
+
+    protected unbindEvents(): void {
+        if (!this.eventsBound) {
+            return;
+        }
+
+        this.closeTrigger.removeEventListener("click", this.handleCloseButtonClick);
+        this.container.removeEventListener("click", this.handleBackdropClick);
+        document.removeEventListener("keydown", this.handleKeydown);
+
+        this.eventsBound = false;
     }
 
     protected lockPage(): void {
@@ -53,6 +76,11 @@ class ModalPortal extends Component<TModalContent> {
 
     // При открытии блокируем фон и уведомляем подписчиков
     open(): void {
+        if (this.isOpen) {
+            return;
+        }
+
+        this.bindEvents();
         this.lockPage();
         this.container.classList.add("modal_active");
         this.isOpen = true;
@@ -61,6 +89,11 @@ class ModalPortal extends Component<TModalContent> {
 
     // При закрытии снимаем блокировки и уведомляем подписчиков
     close(): void {
+        if (!this.isOpen) {
+            return;
+        }
+
+        this.unbindEvents();
         this.releasePage();
         this.container.classList.remove("modal_active");
         this.isOpen = false;

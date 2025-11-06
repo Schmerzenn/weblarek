@@ -37,12 +37,12 @@ class CatalogCardView extends Card<TCardCatalog> {
     // Обновляем оформление категории по типу товара
     set category(value: string) {
         this.categoryNode.textContent = String(value);
+        const normalizedValue = String(value).trim().toLowerCase();
 
         for (const key in categoryMap) {
-            this.categoryNode.classList.toggle(
-                categoryMap[key as CategoryKey],
-                key === value
-            );
+            const className = categoryMap[key as CategoryKey];
+            const shouldApply = key.toLowerCase() === normalizedValue;
+            this.categoryNode.classList.toggle(className, shouldApply);
         }
     }
 
