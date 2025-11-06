@@ -47,7 +47,7 @@ class CatalogCardView extends Card<TCardCatalog> {
     }
 
     set image(value: string) {
-        this.setImage(this.previewImage, value, this.title);
+        this.setImage(this.previewImage, value, this.getTitle());
     }
 }
 

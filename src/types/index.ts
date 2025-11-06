@@ -25,6 +25,11 @@ export interface IOrderEventBindings {
     onAddressInput?(address: string): void;
 }
 
+export type TOrderAddressPayload = { address: string };
+export type TOrderPaymentPayload = { payment: TPay };
+export type TContactEmailPayload = { email: string };
+export type TContactPhonePayload = { phone: string };
+
 export interface IValidationStatusState {
     valid: boolean;
     errors: string;

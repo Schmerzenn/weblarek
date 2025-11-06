@@ -22,18 +22,15 @@ class PreviewCardView extends Card<ICard> {
         this.descriptionNode = ensureElement<HTMLElement>(".card__text", this.container);
         this.actionTrigger = ensureElement<HTMLButtonElement>(".card__button", this.container);
 
-        // Переключаем состояние кнопки и отправляем соответствующее событие
+        // Сообщаем презентеру о желаемом действии
         this.actionTrigger.addEventListener("click", () => {
             const identifier = this.readIdentifier();
             if (!identifier) {
                 return;
             }
 
-            this.isInCart = !this.isInCart;
-            this.actionTrigger.textContent = this.isInCart ? "Удалить из корзины" : "Купить";
-
-            const eventInCart = this.isInCart ? "card:add-product" : "card:remove-product";
-            this.events.emit(eventInCart, { id: identifier });
+            const eventName = this.isInCart ? "card:remove-product" : "card:add-product";
+            this.events.emit(eventName, { id: identifier });
         });
     }
 
@@ -44,13 +41,13 @@ class PreviewCardView extends Card<ICard> {
 
     protected setActiveState(): void {
         this.actionTrigger.disabled = false;
-        this.actionTrigger.textContent = this.isInCart ? "Удалить из корзины" : "Купить";
+        this.updateActionLabel();
     }
 
     // При рендеринге заполняем поля и настраиваем кнопку
     render(data: IInventoryItemSchema, inCart = false): HTMLElement {
         this.assignIdentifier(data.id);
-        this.isInCart = inCart;
+        this.setCartState(inCart);
         this.title = data.title;
         this.price = data.price;
         this.category = data.category;
@@ -79,11 +76,22 @@ class PreviewCardView extends Card<ICard> {
     }
 
     set image(value: string) {
-        this.setImage(this.previewImage, value, this.title);
+        this.setImage(this.previewImage, value, this.getTitle());
     }
 
     set description(value: string) {
         this.descriptionNode.textContent = String(value);
+    }
+
+    setCartState(value: boolean): void {
+        this.isInCart = value;
+        if (!this.actionTrigger.disabled) {
+            this.updateActionLabel();
+        }
+    }
+
+    protected updateActionLabel(): void {
+        this.actionTrigger.textContent = this.isInCart ? "Удалить из корзины" : "Купить";
     }
 }
 

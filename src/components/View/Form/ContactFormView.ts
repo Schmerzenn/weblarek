@@ -9,7 +9,7 @@ interface IContactDetails {
     phone: string;
 }
 
-/** Contact details form. */
+// Форма контактных данных
 class ContactFormView extends Form {
     protected emailField: HTMLInputElement;
     protected phoneField: HTMLInputElement;
@@ -48,7 +48,7 @@ class ContactFormView extends Form {
         this.emailField.value = value;
     }
 
-    get email(): string {
+    getEmail(): string {
         return this.emailField.value;
     }
 
@@ -57,7 +57,7 @@ class ContactFormView extends Form {
         this.phoneField.value = digits ? this.formatPhoneDigits(digits) : "";
     }
 
-    get phone(): string {
+    getPhone(): string {
         const digits = this.normalizePhoneDigits(this.phoneField.value);
         return digits ? `+${digits}` : "";
     }
@@ -111,15 +111,15 @@ class ContactFormView extends Form {
         return formatted;
     }
 
-    /** Show aggregated errors on the form. */
-    isContactsValid(errors?: { [key: string]: string }): void {
+    //Показываем агрегированные ошибки на форме
+    setContactsErrors(errors?: { [key: string]: string }): void {
         this.checkErrors(errors || {});
     }
 
-    get contactsData(): IContactDetails {
+    getContactsData(): IContactDetails {
         return {
-            email: this.email,
-            phone: this.phone,
+            email: this.getEmail(),
+            phone: this.getPhone(),
         };
     }
 }

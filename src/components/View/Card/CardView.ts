@@ -11,6 +11,7 @@ abstract class BaseCardView<T extends ICardPayload> extends Component<T> {
     protected titleNode: HTMLElement;
     protected priceNode: HTMLElement;
     protected cardIdentifier?: string;
+    protected currentTitle = "";
 
     constructor(container: HTMLElement) {
         super(container);
@@ -29,12 +30,17 @@ abstract class BaseCardView<T extends ICardPayload> extends Component<T> {
         return this.cardIdentifier;
     }
 
-    set title(value: string) {
-        this.titleNode.textContent = String(value);
+    getIdentifier(): string | undefined {
+        return this.cardIdentifier;
     }
 
-    get title(): string {
-        return this.titleNode.textContent ?? "";
+    set title(value: string) {
+        this.currentTitle = String(value);
+        this.titleNode.textContent = this.currentTitle;
+    }
+
+    protected getTitle(): string {
+        return this.currentTitle;
     }
 
     // При отсутствии цены выводим «Бесценно», иначе числовое значение

@@ -9,7 +9,15 @@ import { ensureElement, cloneTemplate } from './helpers/helper';
 import { Gallery } from './components/View/CatalogGallery';
 import { Header } from './components/View/HeaderPanel';
 import { CardCatalog } from './components/View/Card/CatalogCardView';
-import { IOrderSubmissionPacket, ICatalogApiPayload, IInventoryItemSchema } from './types';
+import {
+    IOrderSubmissionPacket,
+    ICatalogApiPayload,
+    IInventoryItemSchema,
+    TOrderAddressPayload,
+    TOrderPaymentPayload,
+    TContactEmailPayload,
+    TContactPhonePayload,
+} from './types';
 import { CardPreview } from './components/View/Card/PreviewCardView';
 import { Modal } from './components/View/ModalPortal';
 import { Basket } from './components/View/BasketOverlay';
@@ -30,6 +38,15 @@ type TTemplateRegistry = {
     success: HTMLTemplateElement;
 };
 
+type TViewRegistry = {
+    preview: CardPreview;
+    basket: Basket;
+    orderForm: FormOrder;
+    contactsForm: FormContacts;
+    success: Success;
+};
+type TModalView = 'preview' | 'basket' | 'order' | 'contacts' | 'success' | null;
+
 type TAppContext = {
     events: EventEmitter;
     catalogModel: Catalog;
@@ -40,11 +57,25 @@ type TAppContext = {
     header: Header;
     modal: Modal;
     templates: TTemplateRegistry;
+    views: TViewRegistry;
+    currentModalView: TModalView;
 };
 
 const events = new EventEmitter();
 
 // Собираем базовый контекст приложения
+
+const templates: TTemplateRegistry = {
+    catalogCard: ensureElement<HTMLTemplateElement>('#card-catalog'),
+    previewCard: ensureElement<HTMLTemplateElement>('#card-preview'),
+    basket: ensureElement<HTMLTemplateElement>('#basket'),
+    basketCard: ensureElement<HTMLTemplateElement>('#card-basket'),
+    orderForm: ensureElement<HTMLTemplateElement>('#order'),
+    contactsForm: ensureElement<HTMLTemplateElement>('#contacts'),
+    success: ensureElement<HTMLTemplateElement>('#success'),
+};
+
+const modal = new Modal(ensureElement<HTMLElement>('.modal'), events);
 
 const context: TAppContext = {
     events,
@@ -54,16 +85,33 @@ const context: TAppContext = {
     apiClient: new ApiService(API_URL),
     gallery: new Gallery(ensureElement<HTMLElement>('.page__wrapper')),
     header: new Header(ensureElement<HTMLElement>('.header'), events),
-    modal: new Modal(ensureElement<HTMLElement>('.modal'), events),
-    templates: {
-        catalogCard: ensureElement<HTMLTemplateElement>('#card-catalog'),
-        previewCard: ensureElement<HTMLTemplateElement>('#card-preview'),
-        basket: ensureElement<HTMLTemplateElement>('#basket'),
-        basketCard: ensureElement<HTMLTemplateElement>('#card-basket'),
-        orderForm: ensureElement<HTMLTemplateElement>('#order'),
-        contactsForm: ensureElement<HTMLTemplateElement>('#contacts'),
-        success: ensureElement<HTMLTemplateElement>('#success'),
+    modal,
+    templates,
+    views: {
+        preview: new CardPreview(cloneTemplate(templates.previewCard), events),
+        basket: new Basket(cloneTemplate(templates.basket), events),
+        orderForm: new FormOrder(
+            cloneTemplate(templates.orderForm),
+            {
+                onAddressInput: (address) => events.emit('order:address-input', { address }),
+                onPaymentSelect: (payment) => events.emit('order:payment-select', { payment }),
+                onSubmit: () => events.emit('order:submit'),
+            },
+            events,
+        ),
+        contactsForm: new FormContacts(
+            cloneTemplate(templates.contactsForm),
+            {
+                onEmailInput: (email) => events.emit('contacts:email-input', { email }),
+                onPhoneInput: (phone) => events.emit('contacts:phone-input', { phone }),
+                onSubmit: () => events.emit('contacts:submit'),
+            },
+        ),
+        success: new Success(cloneTemplate(templates.success), {
+            onOrdered: () => modal.close(),
+        }),
     },
+    currentModalView: null,
 };
 
 function syncCartCounter(ctx: TAppContext): void {
@@ -88,10 +136,11 @@ function openPreview(ctx: TAppContext, productId: string): void {
     }
 
     // Рендерим карточку и показываем её в модальном окне
-    const card = new CardPreview(cloneTemplate(ctx.templates.previewCard), ctx.events);
-    const rendered = card.render(product, ctx.cartModel.isProductInCart(productId));
+    const previewCard = ctx.views.preview;
+    const rendered = previewCard.render(product, ctx.cartModel.isProductInCart(productId));
 
     ctx.modal.render({ content: rendered });
+    ctx.currentModalView = 'preview';
     ctx.modal.open();
 }
 
@@ -104,6 +153,8 @@ function addProductToCart(ctx: TAppContext, productId: string): void {
     // Добавляем товар и обновляем счётчик
     ctx.cartModel.addProductToCart(product);
     syncCartCounter(ctx);
+    syncPreviewCartState(ctx, productId);
+    refreshBasketIfOpen(ctx);
 }
 
 function removeProductFromCart(ctx: TAppContext, productId: string): void {
@@ -114,12 +165,25 @@ function removeProductFromCart(ctx: TAppContext, productId: string): void {
 
     ctx.cartModel.removeProductFromCart(product);
     syncCartCounter(ctx);
+    syncPreviewCartState(ctx, productId);
+    refreshBasketIfOpen(ctx);
+}
+
+function syncPreviewCartState(ctx: TAppContext, productId: string): void {
+    const previewCard = ctx.views.preview;
+    if (previewCard.getIdentifier() !== productId) {
+        return;
+    }
+
+    previewCard.setCartState(ctx.cartModel.isProductInCart(productId));
 }
 
 function mapBasketItems(ctx: TAppContext): HTMLElement[] {
     // Формируем элементы корзины
     return ctx.cartModel.getCartProducts().map((item, index) => {
-        const basketCard = new CardBasket(cloneTemplate(ctx.templates.basketCard), ctx.events);
+        const basketCard = new CardBasket(cloneTemplate(ctx.templates.basketCard), {
+            onRemove: (id: string) => removeProductFromCart(ctx, id),
+        });
 
         basketCard.index = index + 1;
         basketCard.title = item.title;
@@ -129,15 +193,24 @@ function mapBasketItems(ctx: TAppContext): HTMLElement[] {
     });
 }
 
-function openBasket(ctx: TAppContext): void {
-    const basketView = new Basket(cloneTemplate(ctx.templates.basket), ctx.events);
-
-    // Подставляем товары и сумму, затем показываем корзину в модальном окне
+function renderBasketView(ctx: TAppContext): HTMLElement {
+    const basketView = ctx.views.basket;
     basketView.basket = mapBasketItems(ctx);
     basketView.total = ctx.cartModel.getTotalCartPrice();
+    return basketView.render();
+}
 
-    ctx.modal.render({ content: basketView.render() });
+function refreshBasketIfOpen(ctx: TAppContext): void {
+    if (ctx.modal.isOpen && ctx.currentModalView === 'basket') {
+        ctx.modal.render({ content: renderBasketView(ctx) });
+    }
+}
+
+function openBasket(ctx: TAppContext): void {
+    const content = renderBasketView(ctx);
+    ctx.modal.render({ content });
     ctx.modal.open();
+    ctx.currentModalView = 'basket';
 }
 
 function applyBuyerSnapshot(ctx: TAppContext, form: FormOrder): void {
@@ -153,31 +226,13 @@ function applyBuyerSnapshot(ctx: TAppContext, form: FormOrder): void {
 }
 
 function showOrderForm(ctx: TAppContext): void {
-    const orderForm = new FormOrder(
-        cloneTemplate(ctx.templates.orderForm),
-        // Пробрасываем обратные вызовы для сохранения данных в модели
-        {
-            onAddressInput: (address) => {
-                ctx.buyerModel.setBuyerData({ address });
-                orderForm.isAddressValid(ctx.buyerModel.sumAddressErrors());
-            },
-            onPaymentSelect: (payment) => {
-                ctx.buyerModel.setBuyerData({ payment });
-            },
-            onSubmit: () => {
-                const orderDetails = orderForm.orderData;
-                ctx.buyerModel.setBuyerData({
-                    payment: orderDetails.payment,
-                    address: orderDetails.address,
-                });
-            },
-        },
-        ctx.events,
-    );
-
+    const orderForm = ctx.views.orderForm;
+    orderForm.removeErrors();
+    orderForm.submitButtonDisabled = false;
     applyBuyerSnapshot(ctx, orderForm);
 
     ctx.modal.render({ content: orderForm.render() });
+    ctx.currentModalView = 'order';
     ctx.modal.open();
 }
 
@@ -185,7 +240,7 @@ function ensureContactsValid(ctx: TAppContext, form: FormContacts): boolean {
     const contactErrors = ctx.buyerModel.sumContactsErrors();
     if (Object.keys(contactErrors).length > 0) {
         // Показываем ошибки контактов
-        form.isContactsValid(contactErrors);
+        form.setContactsErrors(contactErrors);
         return false;
     }
 
@@ -199,7 +254,7 @@ function ensureContactsValid(ctx: TAppContext, form: FormContacts): boolean {
 }
 
 async function submitOrder(ctx: TAppContext, form: FormContacts): Promise<void> {
-    const contactData = form.contactsData;
+    const contactData = form.getContactsData();
 
     ctx.buyerModel.setBuyerData({
         email: contactData.email,
@@ -223,7 +278,7 @@ async function submitOrder(ctx: TAppContext, form: FormContacts): Promise<void> 
 
     try {
         const result = await ctx.apiClient.submitOrder(orderPayload);
-        ctx.events.emit('cart:success', result);
+        showSuccessModal(ctx, result);
     } catch (error) {
         console.error('Order submission failed', error);
         const message =
@@ -235,35 +290,25 @@ async function submitOrder(ctx: TAppContext, form: FormContacts): Promise<void> 
 function populateContactsForm(ctx: TAppContext, form: FormContacts): void {
     const snapshot = ctx.buyerModel.getBuyerData();
     if (!snapshot) {
+        form.email = '';
+        form.phone = '';
         return;
     }
 
     // Восстанавливаем сохранённые контакты
     form.email = snapshot.email;
     form.phone = snapshot.phone;
-    form.isContactsValid(ctx.buyerModel.sumContactsErrors());
+    form.setContactsErrors(ctx.buyerModel.sumContactsErrors());
 }
 
 function showContactsForm(ctx: TAppContext): void {
-    const contactsForm = new FormContacts(
-        cloneTemplate(ctx.templates.contactsForm),
-        // Подписываемся на изменения полей и отправку формы
-        {
-            onEmailInput: (email) => {
-                ctx.buyerModel.setBuyerData({ email });
-                contactsForm.isContactsValid(ctx.buyerModel.sumContactsErrors());
-            },
-            onPhoneInput: (phone) => {
-                ctx.buyerModel.setBuyerData({ phone });
-                contactsForm.isContactsValid(ctx.buyerModel.sumContactsErrors());
-            },
-            onSubmit: () => submitOrder(ctx, contactsForm),
-        },
-    );
-
+    const contactsForm = ctx.views.contactsForm;
+    contactsForm.removeErrors();
+    contactsForm.submitButtonDisabled = false;
     populateContactsForm(ctx, contactsForm);
 
     ctx.modal.render({ content: contactsForm.render() });
+    ctx.currentModalView = 'contacts';
     ctx.modal.open();
 }
 
@@ -275,14 +320,13 @@ function resetStateAfterSuccess(ctx: TAppContext): void {
 }
 
 function showSuccessModal(ctx: TAppContext, payload: { total: number }): void {
-    const successView = new Success(cloneTemplate(ctx.templates.success), {
-        onOrdered: () => ctx.modal.close(),
-    });
+    const successView = ctx.views.success;
 
     // Показываем модальное окно с итоговой суммой
     successView.total = payload.total;
 
     ctx.modal.render({ content: successView.render() });
+    ctx.currentModalView = 'success';
     ctx.modal.open();
     resetStateAfterSuccess(ctx);
 }
@@ -299,7 +343,40 @@ function registerEventHandlers(ctx: TAppContext): void {
     ctx.events.on('cart:open', () => openBasket(ctx));
     ctx.events.on('cart:order', () => showOrderForm(ctx));
     ctx.events.on('cart:contacts', () => showContactsForm(ctx));
-    ctx.events.on('cart:success', (result: { total: number }) => showSuccessModal(ctx, result));
+
+    ctx.events.on('order:address-input', ({ address }: TOrderAddressPayload) => {
+        ctx.buyerModel.setBuyerData({ address });
+        ctx.views.orderForm.isAddressValid(ctx.buyerModel.sumAddressErrors());
+    });
+
+    ctx.events.on('order:payment-select', ({ payment }: TOrderPaymentPayload) => {
+        ctx.buyerModel.setBuyerData({ payment });
+        ctx.views.orderForm.payment = payment;
+    });
+
+    ctx.events.on('order:submit', () => {
+        const orderDetails = ctx.views.orderForm.getOrderData();
+        ctx.buyerModel.setBuyerData({
+            payment: orderDetails.payment,
+            address: orderDetails.address,
+        });
+        ctx.views.orderForm.isAddressValid(ctx.buyerModel.sumAddressErrors());
+    });
+
+    ctx.events.on('contacts:email-input', ({ email }: TContactEmailPayload) => {
+        ctx.buyerModel.setBuyerData({ email });
+        ctx.views.contactsForm.setContactsErrors(ctx.buyerModel.sumContactsErrors());
+    });
+
+    ctx.events.on('contacts:phone-input', ({ phone }: TContactPhonePayload) => {
+        ctx.buyerModel.setBuyerData({ phone });
+        ctx.views.contactsForm.setContactsErrors(ctx.buyerModel.sumContactsErrors());
+    });
+
+    ctx.events.on('contacts:submit', () => submitOrder(ctx, ctx.views.contactsForm));
+    ctx.events.on('modal:close', () => {
+        ctx.currentModalView = null;
+    });
 }
 
 async function bootstrapCatalog(ctx: TAppContext): Promise<void> {

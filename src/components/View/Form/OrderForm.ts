@@ -22,14 +22,12 @@ class OrderFormView extends Form {
         this.cashMethodButton = ensureElement<HTMLButtonElement>('button[name="cash"]', this.container);
         this.addressField = ensureElement<HTMLInputElement>('input[name="address"]', this.container);
 
-        // При выборе способа оплаты подсвечиваем кнопку и уведомляем модель
+        // При выборе способа оплаты уведомляем модель о выборе
         this.cardMethodButton.addEventListener("click", () => {
-            this.highlighTPay("card");
             actions?.onPaymentSelect?.("card");
         });
 
         this.cashMethodButton.addEventListener("click", () => {
-            this.highlighTPay("cash");
             actions?.onPaymentSelect?.("cash");
         });
 
@@ -46,20 +44,16 @@ class OrderFormView extends Form {
         });
     }
 
-    highlighTPay(payment: TPay): void {
-        this.cardMethodButton.classList.toggle("button_alt-active", payment === "card");
-        this.cashMethodButton.classList.toggle("button_alt-active", payment === "cash");
-    }
-
-    selecTPay(payment: TPay): void {
-        this.highlighTPay(payment);
+    highlightPayment(option: TPay): void {
+        this.cardMethodButton.classList.toggle("button_alt-active", option === "card");
+        this.cashMethodButton.classList.toggle("button_alt-active", option === "cash");
     }
 
     set payment(value: TPay) {
-        this.highlighTPay(value);
+        this.highlightPayment(value);
     }
 
-    get payment(): TPay {
+    getPayment(): TPay {
         if (this.cashMethodButton.classList.contains("button_alt-active")) {
             return "cash";
         }
@@ -70,7 +64,7 @@ class OrderFormView extends Form {
         this.addressField.value = value;
     }
 
-    get address(): string {
+    getAddress(): string {
         return this.addressField.value;
     }
 
@@ -78,11 +72,10 @@ class OrderFormView extends Form {
         this.checkErrors(errors || {});
     }
 
-    // Возвращаем данные для формирования заказа
-    get orderData(): IOrderData {
+    getOrderData(): IOrderData {
         return {
-            payment: this.payment,
-            address: this.address
+            payment: this.getPayment(),
+            address: this.getAddress(),
         };
     }
 }

@@ -14,7 +14,7 @@ function composeUrl(segment: string): string {
   return apiOrigin ? `${apiOrigin}/${cleanSegment}` : `/${cleanSegment}`;
 }
 
-/** Builds full API/CDN URLs relative to VITE_API_ORIGIN. */
+// Формирует полные URL относительно переменной VITE_API_ORIGIN
 export const API_URL = composeUrl('api/weblarek');
 export const CDN_URL = composeUrl('content/weblarek');
 
@@ -29,5 +29,5 @@ const CATEGORY_CLASSNAME_MAP = Object.freeze({
   'другое': 'card__category_other',
 } as const);
 
-/** Maps human-readable categories to card CSS modifiers. */
+// Соотносит пользовательские названия категорий с CSS-классами карточек.
 export const categoryMap = CATEGORY_CLASSNAME_MAP;
